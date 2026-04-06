@@ -1,7 +1,7 @@
 ---
 name: keep-research-workflow
 description: "Use Keep as a research operating system: collect, promote, connect, and distill a small corpus of high-value sources without getting lost in the weeds."
-version: 1.0.1
+version: 1.0.2
 author: Hermes Agent
 license: MIT
 ---
@@ -11,10 +11,23 @@ license: MIT
 Keep is a research tool, not a bookmark dump.
 
 Quickstart:
+0. put the source in Keep first, so it exists as a real note before you start organizing it
 1. collect the smallest corpus that plausibly answers the question
 2. promote the sources worth revisiting with titles and a small tag set
 3. connect them with the right edge type (`references`, `cites`, `informs`)
 4. distill the answer into a short synthesis note
+
+Minimal example:
+```bash
+keep put /path/to/source.pdf -t type=paper -t topic=your-topic
+keep tag https://example.com/source --tag title='Readable Title'
+```
+
+What `put` does, briefly:
+- it creates the source note right away
+- analysis, OCR, embeddings, and part creation happen asynchronously in the background
+- the source may look sparse at first and then fill in after the queue runs
+- for URLs, `put` may create or refresh a stub that later becomes a richer note after processing
 
 If you do those well, Keep becomes a small, navigable research graph instead of a citation swamp.
 
@@ -150,11 +163,14 @@ The distillation step should answer:
 ## Working with papers
 
 For PDFs, the preferred path is:
-1. tag as `type=paper`
-2. fetch / rehydrate the source if needed
-3. process the background queue
-4. inspect the parent note first
-5. treat parts as search anchors, not as the primary synthesis surface
+1. put / ingest the source first
+2. tag as `type=paper`
+3. fetch / rehydrate the source if needed
+4. process the background queue
+5. inspect the parent note first
+6. treat parts as search anchors, not as the primary synthesis surface
+
+If the source is scanned or image-based, OCR happens during ingestion before the paper analysis step, so the note you promote is already the text-backed result.
 
 ### What parts are
 
