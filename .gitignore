@@ -1,0 +1,3 @@
+# Hub runtime state — not portable across machines
+skills/.hub/
+skills/.bundled_manifest
