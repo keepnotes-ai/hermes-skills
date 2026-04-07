@@ -1,6 +1,6 @@
-# Hermes Skills
+# Hermes Agent Skills
 
-This repository contains shareable Hermes skills.
+This repository contains shareable skills for [Hermes](https://hermes-agent.nousresearch.com/).
 
 Current skills:
 - `note-taking/keep-research-workflow`
