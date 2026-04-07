@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+"""
+repo-intake-check — safety scan for an untrusted cloned repo
+
+Usage:
+  repo-intake-check <path-to-cloned-repo>
+
+Checks:
+  1. Active git hooks (execute on git ops)
+  2. Symlinks (could escape repo boundary)
+  3. Obsidian plugins (JS that runs in Obsidian)
+  4. Autorun configs (package.json postinstall, Makefile, setup.py, install.sh)
+  5. Agent instruction files (AGENTS.md, CLAUDE.md, .cursorrules — prompt injection)
+  6. Submodules (pull in more untrusted code)
+  7. Suspicious executables (non-doc files with +x)
+  8. Hidden directories beyond .git and .obsidian
+
+Outputs a risk summary: CLEAN / REVIEW / CAUTION
+"""
+
+import os, sys, json, stat
+from pathlib import Path
+
+AUTORUN = {"package.json", "Makefile", "GNUmakefile", "setup.py", "setup.sh",
+           "install.sh", "bootstrap.sh", "configure.sh", "Brewfile", "Gemfile",
+           "pyproject.toml", "go.mod", "build.gradle", "pom.xml"}
+
+AGENT_FILES = {"AGENTS.md", "CLAUDE.md", "CURSOR.md", ".cursorrules", ".clinerules",
+               "SYSTEM_PROMPT.md", "COPILOT_INSTRUCTIONS.md", ".github/copilot-instructions.md"}
+
+SAFE_EXTS = {".md", ".txt", ".json", ".yaml", ".yml", ".css", ".html",
+             ".png", ".jpg", ".jpeg", ".gif", ".svg", ".pdf", ".ico",
+             ".woff", ".woff2", ".ttf", ".eot", ".map", ".lock"}
+
+def scan(root_path):
+    root = Path(root_path).resolve()
+    if not root.exists():
+        print(f"Error: {root_path} does not exist")
+        sys.exit(1)
+
+    issues = {"critical": [], "warn": [], "info": []}
+
+    # 1. Git hooks
+    hooks_dir = root / ".git" / "hooks"
+    if hooks_dir.exists():
+        for h in hooks_dir.iterdir():
+            if not h.name.endswith(".sample") and os.access(h, os.X_OK):
+                issues["warn"].append(f"Active git hook: .git/hooks/{h.name}")
+
+    # 2. Symlinks
+    for p in root.rglob("*"):
+        if p.is_symlink():
+            target = os.readlink(p)
+            if target.startswith("/") or target.startswith(".."):
+                issues["critical"].append(f"Suspicious symlink: {p.relative_to(root)} -> {target}")
+            else:
+                issues["info"].append(f"Symlink (internal): {p.relative_to(root)} -> {target}")
+
+    # 3. Obsidian plugins
+    plugins_dir = root / ".obsidian" / "plugins"
+    if plugins_dir.exists():
+        plugins = [p.name for p in plugins_dir.iterdir() if p.is_dir()]
+        js_count = len(list(plugins_dir.rglob("*.js")))
+        if plugins:
+            issues["warn"].append(
+                f"Obsidian plugins present ({len(plugins)} plugins, {js_count} .js files)\n"
+                f"    These run as JS inside Obsidian when you open the vault.\n"
+                f"    Plugins: {', '.join(plugins[:8])}{'...' if len(plugins) > 8 else ''}"
+            )
+
+    # 4. Autorun configs
+    for p in root.rglob("*"):
+        if ".git" in p.parts:
+            continue
+        if p.name in AUTORUN:
+            rel = p.relative_to(root)
+            # Check package.json for dangerous scripts
+            if p.name == "package.json":
+                try:
+                    pkg = json.loads(p.read_text())
+                    scripts = pkg.get("scripts", {})
+                    dangerous = {k: v for k, v in scripts.items()
+                                 if k in ("preinstall", "install", "postinstall", "prepare")}
+                    if dangerous:
+                        issues["critical"].append(
+                            f"package.json has auto-run scripts: {dangerous}\n    at {rel}")
+                    else:
+                        issues["info"].append(f"package.json (no dangerous scripts): {rel}")
+                except:
+                    issues["warn"].append(f"package.json (unreadable): {rel}")
+            else:
+                issues["warn"].append(f"Build/autorun config present: {rel}")
+
+    # 5. Agent instruction files
+    for p in root.rglob("*"):
+        if ".git" in p.parts:
+            continue
+        if p.name in AGENT_FILES or str(p.relative_to(root)) in AGENT_FILES:
+            rel = p.relative_to(root)
+            try:
+                preview = p.read_text()[:200].replace("\n", " ")
+                issues["warn"].append(f"Agent instructions: {rel}\n    Preview: {preview}")
+            except:
+                issues["warn"].append(f"Agent instructions: {rel}")
+
+    # 6. Submodules
+    gitmod = root / ".gitmodules"
+    if gitmod.exists():
+        content = gitmod.read_text()
+        issues["warn"].append(f".gitmodules present — pulls in external code:\n    {content[:200]}")
+
+    # 7. Suspicious executables
+    for p in root.rglob("*"):
+        if ".git" in p.parts or ".obsidian/plugins" in str(p):
+            continue
+        try:
+            if p.is_file() and p.suffix not in SAFE_EXTS:
+                mode = os.stat(p).st_mode
+                if mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH):
+                    issues["warn"].append(f"Executable file: {p.relative_to(root)}")
+        except:
+            pass
+
+    # 8. Hidden dirs beyond .git and .obsidian
+    for p in root.iterdir():
+        if p.is_dir() and p.name.startswith(".") and p.name not in (".git", ".obsidian", ".github"):
+            issues["info"].append(f"Hidden directory: {p.name}/")
+
+    # Report
+    print(f"\nRepo intake scan: {root.name}")
+    print(f"Path: {root}\n")
+
+    total_issues = len(issues["critical"]) + len(issues["warn"])
+    
+    if issues["critical"]:
+        print("!! CAUTION — review before using !!")
+        for i in issues["critical"]:
+            print(f"\n  [CRITICAL] {i}")
+    
+    if issues["warn"]:
+        for i in issues["warn"]:
+            print(f"\n  [WARN] {i}")
+    
+    if issues["info"]:
+        for i in issues["info"]:
+            print(f"  [info] {i}")
+
+    print()
+    if not issues["critical"] and not issues["warn"]:
+        print("  CLEAN — no actionable issues found.")
+    elif not issues["critical"]:
+        print(f"  REVIEW — {len(issues['warn'])} warnings, nothing automatically dangerous.")
+        print("  Safe to read/browse. Don't run scripts without checking them.")
+    else:
+        print(f"  CAUTION — {len(issues['critical'])} critical issues. Review before opening in any tool.")
+
+    print()
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: repo-intake-check <path>")
+        sys.exit(1)
+    scan(sys.argv[1])
