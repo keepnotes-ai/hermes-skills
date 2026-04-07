@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""
+obsidian-search — find Obsidian vaults on GitHub by topic/keyword
+
+Usage:
+  obsidian-search <topic>
+  obsidian-search gardening
+  obsidian-search "machine learning"
+  obsidian-search cooking
+  obsidian-search philosophy
+
+Strategies used (in order, deduplicated by repo):
+  1. topic:obsidian-vault + topic:<keyword> (exact GitHub topic tags)
+  2. obsidian + keyword in name/description
+  3. keyword vault in name/description (catches non-tagged vaults)
+  4. Verify .obsidian dir present for top candidates
+"""
+
+import subprocess, json, sys, re
+
+def gh_api(path):
+    r = subprocess.run(
+        ["gh", "api", path],
+        capture_output=True, text=True
+    )
+    if r.returncode != 0:
+        return None
+    try:
+        return json.loads(r.stdout)
+    except:
+        return None
+
+def search(query, sort="stars", n=10):
+    encoded = query.replace(" ", "+")
+    data = gh_api(f"search/repositories?q={encoded}&sort={sort}&per_page={n}")
+    if not data:
+        return []
+    return data.get("items", [])
+
+def has_obsidian_dir(full_name):
+    data = gh_api(f"repos/{full_name}/contents")
+    if not data or not isinstance(data, list):
+        return False
+    return any(f.get("name") == ".obsidian" for f in data)
+
+def fmt(repo, verified=None):
+    stars = repo["stargazers_count"]
+    name  = repo["full_name"]
+    desc  = repo.get("description") or ""
+    url   = repo["html_url"]
+    tag   = " [vault confirmed]" if verified else ""
+    return f"  {stars:>4}* {name}{tag}\n         {desc[:80]}\n         {url}"
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: obsidian-search <topic>")
+        sys.exit(1)
+
+    topic = " ".join(sys.argv[1:])
+    slug  = topic.lower().replace(" ", "-")
+
+    print(f"\nSearching GitHub for Obsidian vaults: '{topic}'\n")
+
+    seen = {}
+
+    # Strategy 1: GitHub topic tags
+    results = search(f"topic:obsidian-vault+topic:{slug}")
+    for r in results:
+        seen[r["full_name"]] = r
+
+    # Strategy 2: obsidian + topic in name/description
+    results = search(f"obsidian+{slug.replace('-', '+')}+in:name,description")
+    for r in results:
+        seen[r["full_name"]] = r
+
+    # Strategy 3: keyword vault in name/description
+    results = search(f"{slug.replace('-', '+')}+vault+in:name,description")
+    for r in results:
+        seen[r["full_name"]] = r
+
+    if not seen:
+        print("No results found. Try a different keyword.")
+        return
+
+    # Sort by stars
+    ranked = sorted(seen.values(), key=lambda x: x["stargazers_count"], reverse=True)
+
+    # Verify top 10 for .obsidian dir
+    print(f"Found {len(ranked)} candidates. Verifying top candidates for .obsidian dir...\n")
+    for i, repo in enumerate(ranked[:10]):
+        repo["_verified"] = has_obsidian_dir(repo["full_name"])
+
+    # Print results
+    confirmed = [r for r in ranked if r.get("_verified")]
+    maybe     = [r for r in ranked if not r.get("_verified")]
+
+    if confirmed:
+        print("=== Confirmed Obsidian Vaults ===")
+        for r in confirmed:
+            print(fmt(r, verified=True))
+        print()
+
+    if maybe:
+        print("=== Other Candidates (vault dir not confirmed) ===")
+        for r in maybe[:10]:
+            print(fmt(r))
+        print()
+
+    print(f"Total candidates: {len(ranked)}  |  Confirmed vaults: {len(confirmed)}")
+    print("Tip: clone with: git clone --depth=1 <url> ~/Documents/Vaults/community/<name>")
+    print("     then run: repo-intake-check ~/Documents/Vaults/community/<name>")
+
+if __name__ == "__main__":
+    main()

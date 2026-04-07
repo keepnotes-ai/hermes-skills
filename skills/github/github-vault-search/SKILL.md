@@ -72,14 +72,20 @@ A repo with organized folders of `.md` files (especially with Summary, Q&A, or R
 
 ## Reusable Script
 
-Saved at `~/bin/obsidian-search`. Usage:
+Bundled at `scripts/obsidian-search` in this skill. Install once:
+```bash
+cp <skill-dir>/scripts/obsidian-search ~/bin/obsidian-search
+chmod +x ~/bin/obsidian-search
+```
+
+Usage:
 ```bash
 python3 ~/bin/obsidian-search gardening
 python3 ~/bin/obsidian-search philosophy
 python3 ~/bin/obsidian-search "machine learning"
 ```
 
-Runs all 3 strategies, deduplicates, verifies top 10, prints confirmed vaults first.
+Runs all 4 strategies, deduplicates, verifies top 10, prints confirmed vaults first.
 
 ## Full Workflow: Search → Sample → Secure → Store → Index
 
