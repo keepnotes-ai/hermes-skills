@@ -113,6 +113,17 @@ keep put ~/Documents/Vaults/community/<name> -r --watch \
 
 The `--watch` flag is intentional: keep monitors the vault directory for changes. Combined with a nightly `git pull` (see step 6), new notes surface in keep automatically without re-indexing.
 
+**Why index into keep?** Two benefits beyond explicit search:
+
+1. **Ambient context** — vault notes surface automatically as semantically similar items
+   during keep-powered conversations, without you asking for them. A note on note-taking
+   from a philosophy vault might appear alongside your own recent reflections on the same
+   topic. The vault's knowledge becomes woven into your AI assistant's context.
+
+2. **Explicit search** — `keep query-resolve "topic"` searches across all indexed sources
+   at once: your own notes, conversations, PDFs, and community vaults together. A question
+   about a subject returns the best matches regardless of which vault or source they came from.
+
 **Do NOT index the parent `~/Documents/Vaults/` directory** — keep has a default 1000-file limit and will refuse. Index each vault subdirectory separately. This is better for tagging anyway.
 
 ### 5. (optional) Quality sampling — before step 2 if uncertain
