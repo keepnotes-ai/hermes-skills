@@ -49,6 +49,14 @@ in the skill's YAML frontmatter. Keep it to one sentence, under ~120 chars.
 - `docs: <what>` — README or documentation only
 - No merge commits — rebase before push
 
+## CI
+
+`.github/workflows/secret-scan.yml` runs gitleaks against the full git history on every
+push to main and every PR. If it flags something: if it's a real secret, rotate and
+scrub history; if it's a false positive, add a narrow entry to `.gitleaksignore`
+(by fingerprint). The gitleaks version in the workflow should be kept in sync with
+the pin in the `keep` repo's `.pre-commit-config.yaml`.
+
 ## What NOT to do
 
 - Do not add skills that contain personal config, API keys, or machine-specific paths.
