@@ -22,7 +22,12 @@ Then browse, search, or install skills with the Hermes skills hub.
 
 ## Keep Memory Plugin
 
-Keep is a memory plugin for Hermes Agent. Not yet in core, but you can check out and run Hermes from [this PR branch](https://github.com/NousResearch/hermes-agent/pull/5172), then run `hermes memory setup` and configure Keep with local or API-based models.
+Keep is a memory plugin for Hermes Agent. Not yet in core, but you can install by:
+
+* Run the installer: `curl -sSL https://keepnotes.ai/scripts/install-hermes.sh | bash`
+* Or: check out and run Hermes from [this PR branch](https://github.com/NousResearch/hermes-agent/pull/5172)
+
+then run `hermes memory setup` and configure Keep with local or API-based models.
 
 ## Layout
 
